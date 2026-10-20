@@ -1,9 +1,29 @@
+import os
 import math
 import hashlib
 from collections import Counter
 from zxcvbn import zxcvbn
 from pybloom_live import BloomFilter
 from baseline_checker import check_password_baseline
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEMO_DICT = os.path.join(BASE_DIR, "data", "sample_common_passwords.txt")
+DEMO_BLOOM = os.path.join(BASE_DIR, "data", "demo_breach_bloom.bin")
+
+
+def _resolve(primary, demo, label):
+    """
+    Use the real dataset if it is present (current folder or repo folder).
+    Otherwise fall back to the small demo data shipped in data/ so the
+    project can be run and reviewed without the multi-GB datasets.
+    """
+    for candidate in (primary, os.path.join(BASE_DIR, primary)):
+        if os.path.exists(candidate):
+            return candidate, False
+    print(f"[DEMO MODE] {primary} not found - using small demo {label} from data/. "
+          f"Results for the {label} check are NOT representative.")
+    return demo, True
 
 
 def shannon_entropy(password):
@@ -31,12 +51,14 @@ def check_zxcvbn(password):
     }
 
 
-def load_dictionary(filepath="rockyou.txt"):
+def load_dictionary(filepath=None):
     """
     Loads the smaller RockYou password list fully into memory as hashes,
     so checking against it is instant. This works fine for RockYou
     because it's small enough (~14 million lines) to fit in RAM.
     """
+    if filepath is None:
+        filepath, _ = _resolve("rockyou.txt", DEMO_DICT, "dictionary")
     hashes = set()
     with open(filepath, "r", encoding="latin-1", errors="ignore") as f:
         for line in f:
@@ -55,7 +77,8 @@ def in_rockyou(password, hash_set):
 # This is fast even though the original file was 10GB, because the
 # filter itself (breach_bloom.bin) is a much smaller, pre-built summary.
 print("Loading BreachCompilation Bloom filter...")
-with open("breach_bloom.bin", "rb") as f:
+BLOOM_PATH, DEMO_MODE = _resolve("breach_bloom.bin", DEMO_BLOOM, "Bloom filter")
+with open(BLOOM_PATH, "rb") as f:
     breach_bloom_filter = BloomFilter.fromfile(f)
 print("Bloom filter loaded. Ready.")
 
