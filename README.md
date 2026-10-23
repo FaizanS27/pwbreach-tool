@@ -65,7 +65,7 @@ Wait for the line `Server ready.`, then open **http://127.0.0.1:5000** in your b
 | `Tr0ub4dor-demo-9271` | `WEAK - COMMON PASSWORD` | Found only in the demo Bloom filter (a synthetic entry) |
 | a long random string, e.g. `xK9#mPq2$vLw8zRt` | `STRONG` | Passes every check |
 
-The result page also shows entropy (bits), the zxcvbn score (0-4), and the number of known breaches.
+The result page is a report card: the verdict, an estimated crack time, one card per check (checks that were skipped show in grey), and, for weak passwords, a generated stronger password with a **Copy** button. A **Dark mode** button is in the top right.
 
 Demo mode is for reviewing the logic. Only the full datasets reproduce the thesis results (see [Full setup](#full-setup-with-the-real-datasets)).
 
@@ -168,6 +168,7 @@ pwbreach-tool/
 │   ├── sample_common_passwords.txt   demo stand-in for RockYou
 │   ├── sample_breach_list.txt        synthetic entries for the demo Bloom filter
 │   └── demo_breach_bloom.bin         demo filter built from the file above
+├── extension/              Chrome extension (manifest.json, content.js, test-signup.html)
 ├── tests/test_engine.py    Offline unit tests (HIBP is mocked)
 ├── docs/images/            Screenshots used in this README
 ├── requirements.txt
@@ -202,7 +203,7 @@ When `rockyou.txt` and `breach_bloom.bin` exist in the project root they are use
 python app.py
 ```
 
-Open http://127.0.0.1:5000, type a password, and read the colour-coded result (green Strong, orange Weak, red Compromised).
+Open http://127.0.0.1:5000, type a password, and read the colour-coded report card (green Strong, orange Weak, red Compromised).
 
 ### JSON API
 
@@ -212,7 +213,9 @@ curl -X POST http://127.0.0.1:5000/api/check \
   -d '{"password": "your-password-here"}'
 ```
 
-Response fields: `password`, `entropy_bits`, `zxcvbn_score` (0-4), `in_common_list`, `hibp_breach_count`, `verdict`, `message`. An empty password returns HTTP 400.
+Response fields: `password`, `entropy_bits`, `zxcvbn_score` (0-4), `crack_time_display`, `in_common_list`, `hibp_breach_count`, `checks` (status of each of the five checks: `pass`, `fail`, `info` or `skipped`), `verdict`, `message`, `suggested_password` (only when the verdict is not STRONG).
+
+An empty password returns HTTP 400. If Have I Been Pwned cannot be reached, the API returns HTTP 503 and the web page shows a friendly error instead of crashing.
 
 ### Command line
 
@@ -225,10 +228,19 @@ python compare.py         # integrated tool vs HIBP-only baseline
 
 The thesis also demonstrates a Chrome extension that watches password fields on web pages. After the user stops typing for 500 ms it sends the password to `POST /api/check` on the local server and shows the verdict as a small coloured badge next to the field. It was demonstrated on a test sign-up page and on Amazon's real account-creation page. The server must be running locally for it to work.
 
+**To try it (Chrome):**
+
+1. Start the server: `python app.py`.
+2. Open `chrome://extensions` and switch on **Developer mode** (top right).
+3. Click **Load unpacked** and choose the `extension/` folder of this project.
+4. On the extension's **Details** page, switch on **Allow access to file URLs**.
+5. Open `extension/test-signup.html` in Chrome, click the password box and type `letmein`. After half a second a badge appears above the field.
+
 ## Reproducing the evaluation
 
-- **Speed (thesis Table II):** `python timing_test.py` and `python test_breach_file.py` time Bloom filter lookups. They need the real `breach_bloom.bin` for representative numbers.
+- **Speed (thesis Table 5.1):** `python timing_test.py` and `python test_breach_file.py` time Bloom filter lookups. They need the real `breach_bloom.bin` for representative numbers.
 - **Integrated tool vs breach-only baseline:** `python compare.py` runs every password in `test_passwords.csv` through HIBP alone and through the integrated engine, and reports how many weak passwords only the integrated tool caught.
+- **Test set:** `test_passwords.csv` holds 25 passwords. A handful of them are real passwords taken from the BreachCompilation file, used only as test cases for the evaluation.
 - **BreachCompilation's added value:** `find_unique_case.py` searches for a real password that is in BreachCompilation but not in HIBP. `add_test_case.py` records such a case in the test set.
 
 ## Tests

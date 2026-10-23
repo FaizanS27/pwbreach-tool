@@ -13,7 +13,8 @@ def check_password_baseline(password):
 
     url = f"https://api.pwnedpasswords.com/range/{prefix}"
 
-    response = requests.get(url, headers={"Add-Padding": "true"})
+    response = requests.get(url, headers={"Add-Padding": "true"}, timeout=10)
+    response.raise_for_status()
 
     for line in response.text.splitlines():
         hash_suffix, count = line.split(":")

@@ -1,39 +1,162 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Password Security Checker</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto; padding: 20px; }
-        input[type=text] { width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box; }
-        button { padding: 10px 20px; font-size: 16px; margin-top: 10px; cursor: pointer; }
-        .result { margin-top: 30px; padding: 20px; border-radius: 8px; }
-        .STRONG { background: #e8f8f5; border: 1px solid #02c39a; }
-        .COMPROMISED { background: #fdedea; border: 1px solid #c0392b; }
-        .WEAK { background: #fdf3e7; border: 1px solid #e8a33d; }
-        table { width: 100%; margin-top: 10px; }
-        td { padding: 4px 0; }
+        :root {
+            --bg: #f7fafa; --card-bg: #ffffff; --text: #16323f; --muted: #5c7a85;
+            --border: #e2ebec; --navy: #0b2a3e; --teal: #028090;
+            --pass: #02c39a; --fail: #c0392b; --skip: #b7c4c9; --amber: #e8a33d;
+        }
+        [data-theme="dark"] {
+            --bg: #0b1620; --card-bg: #142430; --text: #e7eef0; --muted: #9db0b8;
+            --border: #24404a; --navy: #cfe8ee; --teal: #4fd1de;
+            --pass: #34e0b3; --fail: #ff6b6b; --skip: #4a5b62; --amber: #f4b860;
+        }
+        body {
+            font-family: Arial, sans-serif; max-width: 640px; margin: 40px auto; padding: 20px;
+            background: var(--bg); color: var(--text); transition: background .2s, color .2s;
+        }
+        .topbar { display: flex; justify-content: space-between; align-items: center; }
+        .toggle-btn {
+            border: 1px solid var(--border); background: var(--card-bg); color: var(--text);
+            padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 14px;
+        }
+        input[type=text] {
+            width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;
+            background: var(--card-bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+        }
+        button.main-btn {
+            padding: 10px 20px; font-size: 16px; margin-top: 10px; cursor: pointer;
+            background: var(--teal); color: white; border: none; border-radius: 6px;
+        }
+        .error-msg { color: var(--fail); margin-top: 16px; }
+        .result { margin-top: 25px; padding: 20px; border-radius: 10px; border: 1px solid var(--border); background: var(--card-bg); }
+        .verdict-STRONG { border-left: 6px solid var(--pass); }
+        .verdict-COMPROMISED { border-left: 6px solid var(--fail); }
+        .verdict-WEAK { border-left: 6px solid var(--amber); }
+        .crack-time { margin-top: 8px; font-size: 14px; color: var(--muted); }
+        .crack-time strong { color: var(--text); }
+        .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+        .check-card {
+            border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--bg);
+        }
+        .check-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+        .check-card .status { font-size: 14px; font-weight: bold; margin-top: 2px; }
+        .status-pass { color: var(--pass); }
+        .status-fail { color: var(--fail); }
+        .status-skipped { color: var(--skip); font-weight: normal; font-style: italic; }
+        .status-info { color: var(--teal); }
+        .suggestion-box {
+            margin-top: 18px; padding: 14px; border-radius: 8px; background: var(--bg); border: 1px dashed var(--teal);
+        }
+        .suggestion-box .pw-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+        .suggestion-box code {
+            flex: 1; background: var(--card-bg); border: 1px solid var(--border); padding: 8px 10px;
+            border-radius: 6px; font-size: 14px; word-break: break-all;
+        }
+        .copy-btn {
+            border: 1px solid var(--border); background: var(--card-bg); color: var(--text);
+            padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+        }
+        .copy-btn.copied { background: var(--pass); color: white; border-color: var(--pass); }
     </style>
 </head>
 <body>
-    <h1>Password Security Checker</h1>
+    <div class="topbar">
+        <h1 style="font-size: 24px;">Password Security Checker</h1>
+        <button class="toggle-btn" id="themeToggle" onclick="toggleTheme()">Dark mode</button>
+    </div>
+
     <form method="POST">
         <label for="password">Enter a password to check:</label><br><br>
-        <input type="text" name="password" id="password" placeholder="Type a password..." required>
+        <input type="text" name="password" id="password" placeholder="Type a password..." autocomplete="off" required>
         <br>
-        <button type="submit">Check Password</button>
+        <button class="main-btn" type="submit">Check Password</button>
     </form>
 
+    {% if error %}<p class="error-msg">{{ error }}</p>{% endif %}
+
     {% if result %}
-    <div class="result {{ 'WEAK' if 'WEAK' in result.verdict else result.verdict }}">
+    {% set verdict_class = 'verdict-WEAK' if 'WEAK' in result.verdict else 'verdict-' + result.verdict %}
+    <div class="result {{ verdict_class }}">
         <h2>Verdict: {{ result.verdict }}</h2>
         <p>{{ result.message }}</p>
-        <table>
-            <tr><td><strong>Entropy:</strong></td><td>{{ result.entropy_bits }} bits</td></tr>
-            <tr><td><strong>zxcvbn score:</strong></td><td>{{ result.zxcvbn_score }} / 4</td></tr>
-            <tr><td><strong>Found in common list:</strong></td><td>{{ result.in_common_list }}</td></tr>
-            <tr><td><strong>Breach count:</strong></td><td>{{ result.hibp_breach_count }}</td></tr>
-        </table>
+        <p class="crack-time">Estimated time to crack: <strong>{{ result.crack_time_display }}</strong></p>
+
+        <div class="cards">
+            <div class="check-card">
+                <div class="label">Entropy</div>
+                <div class="status status-info">{{ result.entropy_bits }} bits</div>
+            </div>
+            <div class="check-card">
+                <div class="label">Pattern (zxcvbn)</div>
+                <div class="status status-{{ result.checks.pattern.status }}">{{ result.zxcvbn_score }} / 4</div>
+            </div>
+            <div class="check-card">
+                <div class="label">HIBP Breach</div>
+                <div class="status status-{{ result.checks.hibp.status }}">
+                    {% if result.checks.hibp.value > 0 %}Found ({{ result.checks.hibp.value }}){% else %}Clear{% endif %}
+                </div>
+            </div>
+            <div class="check-card">
+                <div class="label">RockYou List</div>
+                {% if result.checks.rockyou.checked %}
+                <div class="status status-{{ result.checks.rockyou.status }}">{% if result.checks.rockyou.value %}Found{% else %}Clear{% endif %}</div>
+                {% else %}
+                <div class="status status-skipped">Skipped</div>
+                {% endif %}
+            </div>
+            <div class="check-card">
+                <div class="label">BreachCompilation</div>
+                {% if result.checks.breachcompilation.checked %}
+                <div class="status status-{{ result.checks.breachcompilation.status }}">{% if result.checks.breachcompilation.value %}Found{% else %}Clear{% endif %}</div>
+                {% else %}
+                <div class="status status-skipped">Skipped</div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if result.suggested_password %}
+        <div class="suggestion-box">
+            <div style="font-size: 14px; font-weight: bold;">Try this instead:</div>
+            <div class="pw-row">
+                <code id="suggestedPw">{{ result.suggested_password }}</code>
+                <button class="copy-btn" id="copyBtn" onclick="copyPassword()">Copy</button>
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% endif %}
+
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('themeToggle').textContent = isDark ? 'Dark mode' : 'Light mode';
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+        (function () {
+            const saved = localStorage.getItem('theme');
+            if (saved === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                window.addEventListener('DOMContentLoaded', () => {
+                    document.getElementById('themeToggle').textContent = 'Light mode';
+                });
+            }
+        })();
+        function copyPassword() {
+            const pw = document.getElementById('suggestedPw').textContent;
+            navigator.clipboard.writeText(pw).then(() => {
+                const btn = document.getElementById('copyBtn');
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+            });
+        }
+    </script>
 </body>
 </html>

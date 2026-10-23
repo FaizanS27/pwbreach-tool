@@ -1,3 +1,4 @@
+import requests
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from engine import full_check, load_dictionary
@@ -13,11 +14,15 @@ print(f"Loaded {len(dictionary_hashes):,} passwords. Server ready.")
 @app.route("/", methods=["GET", "POST"])
 def home():
     result = None
+    error = None
     if request.method == "POST":
         password = request.form.get("password", "")
         if password:
-            result = full_check(password, dictionary_hashes)
-    return render_template("index.html", result=result)
+            try:
+                result = full_check(password, dictionary_hashes)
+            except requests.RequestException:
+                error = "Could not reach the Have I Been Pwned service. Check your internet connection and try again."
+    return render_template("index.html", result=result, error=error)
 
 
 @app.route("/api/check", methods=["POST"])
@@ -31,7 +36,10 @@ def api_check():
     password = data.get("password", "") if data else ""
     if not password:
         return jsonify({"error": "no password provided"}), 400
-    result = full_check(password, dictionary_hashes)
+    try:
+        result = full_check(password, dictionary_hashes)
+    except requests.RequestException:
+        return jsonify({"error": "breach service unreachable"}), 503
     return jsonify(result)
 
 

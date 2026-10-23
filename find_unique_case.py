@@ -1,3 +1,6 @@
+import os, sys
+if not os.path.exists("breachcompilation.txt"):
+    sys.exit("Needs the real breachcompilation.txt (not included). See README: Full setup with the real datasets.")
 from baseline_checker import check_password_baseline
 import random
 import re

@@ -1,6 +1,8 @@
 import os
 import math
 import hashlib
+import secrets
+import string
 from collections import Counter
 from zxcvbn import zxcvbn
 from pybloom_live import BloomFilter
@@ -45,9 +47,13 @@ def shannon_entropy(password):
 def check_zxcvbn(password):
     """Uses the zxcvbn library to realistically estimate crackability."""
     result = zxcvbn(password)
+    crack_time = result["crack_times_display"].get(
+        "offline_slow_hashing_1e4_per_second", "unknown"
+    )
     return {
         "score": result["score"],  # 0 (terrible) to 4 (great)
         "suggestions": result["feedback"].get("suggestions", []),
+        "crack_time_display": crack_time,
     }
 
 
@@ -94,6 +100,12 @@ def in_breach_compilation(password):
     return password in breach_bloom_filter
 
 
+def generate_strong_password(length=16):
+    """Creates a random, strong password suggestion when the checked one is weak."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
 def full_check(password, dictionary_hashes):
     """
     The integrated check: combines all checks into one final verdict.
@@ -105,15 +117,48 @@ def full_check(password, dictionary_hashes):
     pattern_result = check_zxcvbn(password)
     breach_count = check_password_baseline(password)
 
+    # Status of each of the five checks, including the ones skipped because an
+    # earlier check already settled the verdict. Used by the report-card view.
+    checks = {
+        "entropy": {"checked": True, "status": "info", "value": round(entropy, 2)},
+        "pattern": {
+            "checked": True,
+            "status": "pass" if pattern_result["score"] >= 3 else "fail",
+            "value": pattern_result["score"],
+        },
+        "hibp": {
+            "checked": True,
+            "status": "fail" if breach_count > 0 else "pass",
+            "value": breach_count,
+        },
+        "rockyou": {"checked": False, "status": "skipped", "value": None},
+        "breachcompilation": {"checked": False, "status": "skipped", "value": None},
+    }
+
+    dict_hit = None  # None = not checked (already breached)
+
     if breach_count > 0:
         verdict = "COMPROMISED"
         message = f"This exact password has appeared in {breach_count:,} known breaches. Change it completely."
-        dict_hit = None  # not checked - already the worst possible case
 
     else:
         # Only check RockYou + BreachCompilation if HIBP didn't already flag it.
-        # "or" short-circuits: if RockYou finds it, the Bloom filter check is skipped.
-        dict_hit = in_rockyou(password, dictionary_hashes) or in_breach_compilation(password)
+        rockyou_hit = in_rockyou(password, dictionary_hashes)
+        checks["rockyou"] = {
+            "checked": True,
+            "status": "fail" if rockyou_hit else "pass",
+            "value": rockyou_hit,
+        }
+        if rockyou_hit:
+            dict_hit = True  # Bloom filter skipped: RockYou already found a match
+        else:
+            bc_hit = in_breach_compilation(password)
+            checks["breachcompilation"] = {
+                "checked": True,
+                "status": "fail" if bc_hit else "pass",
+                "value": bc_hit,
+            }
+            dict_hit = bc_hit
 
         if dict_hit:
             verdict = "WEAK - COMMON PASSWORD"
@@ -126,14 +171,19 @@ def full_check(password, dictionary_hashes):
             verdict = "STRONG"
             message = "No issues found across structure or breach checks."
 
+    suggested_password = generate_strong_password() if verdict != "STRONG" else None
+
     return {
         "password": password,
         "entropy_bits": round(entropy, 2),
         "zxcvbn_score": pattern_result["score"],
+        "crack_time_display": pattern_result["crack_time_display"],
         "in_common_list": dict_hit,
         "hibp_breach_count": breach_count,
+        "checks": checks,
         "verdict": verdict,
         "message": message,
+        "suggested_password": suggested_password,
     }
 
 
