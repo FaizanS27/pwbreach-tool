@@ -76,6 +76,7 @@ Demo mode is for reviewing the logic. Only the full datasets reproduce the thesi
 | `python` or `pip` not found | Install Python from python.org and tick "Add Python to PATH"; on macOS/Linux use `python3` and `pip3` |
 | `venv\Scripts\activate` is blocked on Windows | Run `Set-ExecutionPolicy -Scope Process RemoteSigned` in PowerShell, then activate again |
 | `ModuleNotFoundError` | The environment is not active, or step 2 was skipped. Activate it and run `pip install -r requirements.txt` again |
+| `pip.exe` is blocked ("Application Control policy") | Run `python -m pip install -r requirements.txt` instead |
 | `[DEMO MODE]` is printed | Expected when the large datasets are missing |
 | Connection error on a password check | The HIBP lookup needs internet access |
 | Port 5000 already in use | Close the other program using it (on macOS, turn off AirPlay Receiver) and restart |
@@ -125,13 +126,6 @@ BreachCompilation is about 10 GB and 1,012,024,699 lines. It cannot be loaded in
 
 Trade-off: the filter is built with a 0.1% error rate, so about 1 in 1000 lookups may report a match that is not really there. It never misses a password that is genuinely in the file, which is the safe direction for a security tool.
 
-### Results from the thesis
-
-| Check | Before Bloom filter | After |
-|-------|--------------------|-------|
-| Worst-case BreachCompilation lookup | 171.10 s | < 0.001 s |
-| Same check in the browser | ~3 minutes | Instant |
-
 ---
 
 ## Dependencies
@@ -171,8 +165,7 @@ pwbreach-tool/
 ├── extension/              Chrome extension (manifest.json, content.js, test-signup.html)
 ├── tests/test_engine.py    Offline unit tests (HIBP is mocked)
 ├── docs/images/            Screenshots used in this README
-├── requirements.txt
-└── LICENSE
+└── requirements.txt
 ```
 
 ---
@@ -260,26 +253,7 @@ Eight offline tests cover the verdict priority, the Bloom filter (no false negat
 - **The tool runs locally.** The browser extension sends the typed password to the local server. A hosted version would need HTTPS and a strict no-storage, no-logging policy for submitted passwords.
 - Do not test with real passwords you still use.
 
-## Security notes
-
-`app.py` runs with `debug=True` and CORS open to all origins so a browser extension can reach it. This is acceptable on a single machine for research, but it must not be exposed to a network as-is.
-
-## Known limitations
-
-- Runs locally only; not hosted online.
-- Breach checks match **exact** passwords only, not slightly modified variants (unlike MIGP, Pal et al. 2022).
-- The Bloom filter has a ~0.1% false-positive rate.
-- The RockYou list used in the experiments was a 12,669-password sample, not the full list.
-- Evaluation is still in progress: the comparison against zxcvbn alone and the user study are not complete.
-- The tool needs internet access for the HIBP check.
-
-## Future work
-
-Host the tool securely, move the k-anonymity step into the extension so the server never sees the password, detect modified variants of leaked passwords, use the full RockYou list, grow the test set, and run an ethics-approved usability study.
-
-## License
-
-MIT, see [LICENSE](LICENSE).
+---
 
 ## References
 
