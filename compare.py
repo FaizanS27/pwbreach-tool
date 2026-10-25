@@ -1,6 +1,14 @@
 import csv
+import sys
+from zxcvbn import zxcvbn
 from baseline_checker import check_password_baseline
 from engine import full_check, load_dictionary
+
+# Print Cyrillic and other non-English passwords correctly, also when output is redirected.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 print("Loading dictionary...")
 dictionary_hashes = load_dictionary()
@@ -9,24 +17,43 @@ with open("test_passwords.csv", "r", encoding="utf-8") as f:
     reader = csv.DictReader(f)
     passwords = [row["password"] for row in reader]
 
-print(f"\n{'PASSWORD':<32} {'BASELINE':<12} {'INTEGRATED VERDICT':<28} {'CAUGHT ONLY BY INTEGRATED?'}")
-print("-" * 100)
+print(f"\n{'PASSWORD':<30} {'HIBP-ONLY':<10} {'ZXCVBN-ONLY':<13} {'INTEGRATED VERDICT':<28} {'ONLY INTEGRATED vs HIBP?':<26} {'vs ZXCVBN?'}")
+print("-" * 125)
 
-caught_only_by_integrated = 0
+n = len(passwords)
+hibp_flagged = zxcvbn_weak = integrated_flagged = 0
+breached_total = breached_missed_by_zxcvbn = 0
+only_vs_hibp = only_vs_zxcvbn = 0
 
 for pw in passwords:
-    baseline_result = check_password_baseline(pw)
-    baseline_label = "FLAGGED" if baseline_result > 0 else "clean"
+    hibp_result = check_password_baseline(pw)
+    hibp_label = "FLAGGED" if hibp_result > 0 else "clean"
 
-    integrated_result = full_check(pw, dictionary_hashes)
-    integrated_label = integrated_result["verdict"]
+    z_score = zxcvbn(pw)["score"]
+    z_label = f"weak ({z_score})" if z_score < 3 else f"ok ({z_score})"
 
-    only_integrated = (baseline_label == "clean") and (integrated_label != "STRONG")
-    if only_integrated:
-        caught_only_by_integrated += 1
+    verdict = full_check(pw, dictionary_hashes)["verdict"]
+    is_breached = verdict in ("COMPROMISED", "WEAK - COMMON PASSWORD")
 
-    print(f"{pw:<32} {baseline_label:<12} {integrated_label:<28} {'YES' if only_integrated else 'no'}")
+    vs_hibp = (hibp_label == "clean") and (verdict != "STRONG")
+    vs_zxcvbn = (z_score >= 3) and (verdict != "STRONG")
 
-print("-" * 100)
-print(f"\nOut of {len(passwords)} passwords tested, the integrated tool caught "
-      f"{caught_only_by_integrated} weak/risky password(s) that the breach-only baseline missed entirely.")
+    hibp_flagged += hibp_label == "FLAGGED"
+    zxcvbn_weak += z_score < 3
+    integrated_flagged += verdict != "STRONG"
+    breached_total += is_breached
+    breached_missed_by_zxcvbn += is_breached and z_score >= 3
+    only_vs_hibp += vs_hibp
+    only_vs_zxcvbn += vs_zxcvbn
+
+    print(f"{pw:<30} {hibp_label:<10} {z_label:<13} {verdict:<28} {'YES' if vs_hibp else 'no':<26} {'YES' if vs_zxcvbn else 'no'}")
+
+print("-" * 125)
+print(f"\nPasswords tested:                         {n}")
+print(f"Flagged by HIBP alone:                    {hibp_flagged}")
+print(f"Rated weak by zxcvbn alone (score < 3):   {zxcvbn_weak}")
+print(f"Flagged by the integrated tool:           {integrated_flagged}")
+print(f"Known-breached/common (integrated):       {breached_total}")
+print(f"  ...of which zxcvbn alone rates OK:      {breached_missed_by_zxcvbn}")
+print(f"Caught only by integrated vs HIBP-only:   {only_vs_hibp}")
+print(f"Caught only by integrated vs zxcvbn-only: {only_vs_zxcvbn}")

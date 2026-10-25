@@ -122,7 +122,7 @@ A password is marked `STRONG` only if none of the earlier conditions apply. This
 
 ### Why a Bloom filter
 
-BreachCompilation is about 10 GB and 1,012,024,699 lines. It cannot be loaded into memory, and scanning it from disk took **171.10 s** in the worst case. A Bloom filter built once from the file answers lookups in **under 0.001 s** (roughly 170,000x faster) and loads in under a second.
+BreachCompilation is about 10 GB and 1,012,024,699 lines. It cannot be loaded into memory, and scanning it from disk took **171.10 s** in the worst case. A Bloom filter built once from the file answers lookups in **under 0.001 s** (more than 170,000x faster) and is loaded once, when the server starts.
 
 Trade-off: the filter is built with a 0.1% error rate, so about 1 in 1000 lookups may report a match that is not really there. It never misses a password that is genuinely in the file, which is the safe direction for a security tool.
 
